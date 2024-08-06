@@ -17,6 +17,7 @@ import functools
 import hashlib
 import struct
 
+from scapy.automaton import select_objects
 from scapy.config import conf, crypto_validator
 from scapy.error import log_runtime
 from scapy.packet import Packet, bind_layers, bind_top_down
@@ -30,7 +31,6 @@ from scapy.fields import (
     FlagsField,
     IP6Field,
     IPField,
-    IntEnumField,
     IntField,
     LEIntField,
     LEIntEnumField,
@@ -1888,7 +1888,7 @@ class SMB2_Compression_Capabilities(Packet):
             count_of="CompressionAlgorithms",
         ),
         ShortField("Padding", 0x0),
-        IntEnumField(
+        LEIntEnumField(
             "Flags",
             0x0,
             {
@@ -2424,7 +2424,7 @@ class SMB2_CREATE_QUERY_ON_DISK_ID(Packet):
 
 class SMB2_CREATE_RESPONSE_LEASE(Packet):
     fields_desc = [
-        XStrFixedLenField("LeaseKey", b"", length=16),
+        UUIDField("LeaseKey", None),
         FlagsField(
             "LeaseState",
             0x7,
@@ -2451,7 +2451,7 @@ class SMB2_CREATE_RESPONSE_LEASE(Packet):
 class SMB2_CREATE_RESPONSE_LEASE_V2(Packet):
     fields_desc = [
         SMB2_CREATE_RESPONSE_LEASE,
-        XStrFixedLenField("ParentLeaseKey", b"", length=16),
+        UUIDField("ParentLeaseKey", None),
         LEShortField("Epoch", 0),
         LEShortField("Reserved", 0),
     ]
@@ -3952,7 +3952,7 @@ class SMB2_Compression_Transform_Header(Packet):
         StrFixedLenField("Start", b"\xfcSMB", 4),
         LEIntField("OriginalCompressedSegmentSize", 0x0),
         LEShortEnumField("CompressionAlgorithm", 0, SMB2_COMPRESSION_ALGORITHMS),
-        ShortEnumField(
+        LEShortEnumField(
             "Flags",
             0x0,
             {
@@ -4237,7 +4237,7 @@ class SMBStreamSocket(StreamSocket):
     def select(sockets, remain=conf.recv_poll_rate):
         if any(getattr(x, "queue", None) for x in sockets):
             return [x for x in sockets if isinstance(x, SMBStreamSocket) and x.queue]
-        return StreamSocket.select(sockets, remain=remain)
+        return select_objects(sockets, remain=remain)
 
 
 class SMBSession(DefaultSession):
@@ -4253,6 +4253,7 @@ class SMBSession(DefaultSession):
         # SMB session parameters
         self.CompoundQueue = []
         self.Dialect = 0x0202  # Updated by parent
+        self.Credits = 0
         self.SecurityMode = 0
         # Crypto parameters
         self.SMBSessionKey = None
